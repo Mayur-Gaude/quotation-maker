@@ -22,9 +22,15 @@ const QuotationList = () => {
     setLoading(true);
     try {
       const res = await getQuotations({ page, limit, search });
-      setQuotations(res.data.data);
-      setTotal(res.data.total);
-    } finally {
+      // setQuotations(res.data.data);
+      // setTotal(res.data.total);
+      setQuotations(Array.isArray(res.data?.data) ? res.data.data : []);
+      setTotal(typeof res.data?.total === "number" ? res.data.total : 0);
+    }catch (err) {
+    console.error("Failed to fetch quotations:", err);
+    setQuotations([]);
+    setTotal(0);
+    }finally {
       setLoading(false);
     }
   };
@@ -89,7 +95,7 @@ const QuotationList = () => {
             <div className="flex items-center justify-center py-16">
               <div className="h-8 w-8 animate-spin rounded-full border-2 border-slate-200 border-t-slate-600" />
             </div>
-          ) : quotations.length === 0 ? (
+          ) : quotations?.length === 0 ? (
             <div className="py-16 text-center">
               <p className="text-slate-500">No quotations found.</p>
               <button
@@ -142,7 +148,7 @@ const QuotationList = () => {
                           {q.customerDetails?.name ?? "—"}
                         </td>
                         <td className="px-4 py-3 text-right tabular-nums text-slate-700">
-                          {Number(q.grandTotal).toFixed(2)}
+                          {Number(q.grandTotal ?? 0).toFixed(2)}
                         </td>
                         <td className="px-4 py-3">
                           <span
