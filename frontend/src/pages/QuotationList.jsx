@@ -52,6 +52,21 @@ const QuotationList = () => {
     link.click();
   };
 
+  const handleDelete = async id => {
+    const confirmDelete = window.confirm(
+      "Are you sure you want to delete this quotation?"
+    );
+    if (!confirmDelete) return;
+
+    try {
+      await deleteQuotation(id);
+      setQuotations(prev => prev.filter(q => q._id !== id));
+      setTotal(prev => Math.max(0, prev - 1));
+    } catch (err) {
+      console.error("Failed to delete quotation:", err);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-slate-50 py-8 px-4 sm:px-6 lg:px-8">
       <div className="mx-auto max-w-5xl">
@@ -191,6 +206,13 @@ const QuotationList = () => {
                               className="rounded-lg px-2.5 py-1.5 text-sm font-medium text-violet-600 transition hover:bg-violet-50"
                             >
                               Excel
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDelete(q._id)}
+                              className="rounded-lg px-2.5 py-1.5 text-sm font-medium text-rose-600 transition hover:bg-rose-50"
+                            >
+                              Delete
                             </button>
                           </div>
                         </td>

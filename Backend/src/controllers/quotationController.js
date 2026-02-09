@@ -25,7 +25,10 @@ export const createQuotationController = async (req, res, next) => {
             });
         }
 
-        const quotation = await createQuotation(req.body);
+        const quotation = await createQuotation({
+            ...req.body,
+            userId: req.user.id
+        });
 
         res.status(201).json({
             success: true,
@@ -41,7 +44,12 @@ export const createQuotationController = async (req, res, next) => {
  */
 export const getAllQuotationsController = async (req, res, next) => {
     try {
-        const result = await getAllQuotations(req.query);
+        const result = await getAllQuotations({
+            userId: req.user.id,
+            page: req.query.page,
+            limit: req.query.limit,
+            search: req.query.search
+        });
 
         res.status(200).json({
             success: true,
@@ -58,7 +66,10 @@ export const getAllQuotationsController = async (req, res, next) => {
  */
 export const getQuotationByIdController = async (req, res, next) => {
     try {
-        const quotation = await getQuotationById(req.params.id);
+        const quotation = await getQuotationById(
+            req.params.id,
+            req.user.id
+        );
 
         res.status(200).json({
             success: true,
@@ -83,7 +94,11 @@ export const updateQuotationController = async (req, res, next) => {
             });
         }
 
-        const quotation = await updateQuotation(req.params.id, req.body);
+        const quotation = await updateQuotation(
+            req.params.id,
+            req.user.id,
+            req.body
+        );
 
         res.status(200).json({
             success: true,
@@ -99,7 +114,7 @@ export const updateQuotationController = async (req, res, next) => {
  */
 export const deleteQuotationController = async (req, res, next) => {
     try {
-        await deleteQuotation(req.params.id);
+        await deleteQuotation(req.params.id, req.user.id);
 
         res.status(200).json({
             success: true,
@@ -109,7 +124,6 @@ export const deleteQuotationController = async (req, res, next) => {
         next(error);
     }
 };
-
 
 // Download PDF
 export const downloadQuotationPDFController = async (req, res, next) => {
