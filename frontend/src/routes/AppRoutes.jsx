@@ -31,6 +31,7 @@ import ViewQuotation from "../pages/ViewQuotation";
 import Login from "../auth/Login";
 import Register from "../auth/Register";
 import ProtectedRoute from "../guards/ProtectedRoute";
+import AuthLayout from "../layouts/AuthLayout";
 
 const AppRoutes = () => {
   return (
@@ -45,7 +46,9 @@ const AppRoutes = () => {
           path="/"
           element={
             <ProtectedRoute>
-              <QuotationList />
+              <AuthLayout>
+                <QuotationList />
+              </AuthLayout>
             </ProtectedRoute>
           }
         />
@@ -54,7 +57,9 @@ const AppRoutes = () => {
           path="/create"
           element={
             <ProtectedRoute>
-              <CreateQuotation />
+              <AuthLayout>
+                <CreateQuotation />
+              </AuthLayout>
             </ProtectedRoute>
           }
         />
@@ -63,7 +68,9 @@ const AppRoutes = () => {
           path="/edit/:id"
           element={
             <ProtectedRoute>
-              <EditQuotation />
+              <AuthLayout> 
+                <EditQuotation />
+              </AuthLayout>
             </ProtectedRoute>
           }
         />
@@ -72,7 +79,9 @@ const AppRoutes = () => {
           path="/view/:id"
           element={
             <ProtectedRoute>
-              <ViewQuotation />
+              <AuthLayout> 
+                <ViewQuotation />
+              </AuthLayout>
             </ProtectedRoute>
           }
         />

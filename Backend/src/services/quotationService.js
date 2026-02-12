@@ -22,11 +22,12 @@ export const createQuotation = async (quotationData) => {
 /**
  * Get all quotations (service)
  */
-export const getAllQuotations = async ({ userId, page, limit, search }) => {
+export const getAllQuotations = async ({ userId, page, limit, search, status }) => {
     const currentPage = parseInt(page) || 1;
     const perPage = parseInt(limit) || 10;
     const skip = (currentPage - 1) * perPage;
     const keyword = search || "";
+
 
     const searchFilter = keyword
         ? {
@@ -40,6 +41,7 @@ export const getAllQuotations = async ({ userId, page, limit, search }) => {
 
     const finalFilter = {
         userId,
+        ...(status && { status }),
         ...searchFilter
     };
 

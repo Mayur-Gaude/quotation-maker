@@ -48,7 +48,8 @@ export const getAllQuotationsController = async (req, res, next) => {
             userId: req.user.id,
             page: req.query.page,
             limit: req.query.limit,
-            search: req.query.search
+            search: req.query.search,
+            status: req.query.status
         });
 
         res.status(200).json({

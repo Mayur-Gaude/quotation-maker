@@ -1,6 +1,6 @@
-import React from "react";
+import React, { use } from "react";
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate,useSearchParams } from "react-router-dom";
 import {
   getQuotations,
   deleteQuotation,
@@ -10,6 +10,8 @@ import {
 
 const QuotationList = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const status = searchParams.get("status");
 
   const [quotations, setQuotations] = useState([]);
   const [search, setSearch] = useState("");
@@ -21,7 +23,7 @@ const QuotationList = () => {
   const fetchQuotations = async () => {
     setLoading(true);
     try {
-      const res = await getQuotations({ page, limit, search });
+      const res = await getQuotations({ page, limit, search, status });
       // setQuotations(res.data.data);
       // setTotal(res.data.total);
       setQuotations(Array.isArray(res.data?.data) ? res.data.data : []);
@@ -37,7 +39,11 @@ const QuotationList = () => {
 
   useEffect(() => {
     fetchQuotations();
-  }, [page, search]);
+  }, [page, search, status]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [search, status]);
 
   const totalPages = Math.max(1, Math.ceil(total / limit));
 
