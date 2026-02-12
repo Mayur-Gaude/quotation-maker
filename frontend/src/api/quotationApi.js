@@ -20,7 +20,7 @@ import axios from "axios";
 
 const API = axios.create({
     baseURL:
-        import.meta.env.VITE_API_URL || "http://localhost:5000/api/quotations"
+        import.meta.env.VITE_API_URL || "http://localhost:5000/api"
 });
 
 // 🔐 Attach JWT automatically
@@ -36,29 +36,29 @@ API.interceptors.request.use(
 );
 
 export const getQuotations = (params) =>
-    API.get("/", { params });
+    API.get("/quotations/", { params });
 
 export const getQuotation = (id) =>
-    API.get(`/${id}`);
+    API.get(`/quotations/${id}`);
 
 export const createQuotation = (data) =>
-    API.post("/", data);
+    API.post("/quotations/", data);
 
 export const updateQuotation = (id, data) =>
-    API.put(`/${id}`, data);
+    API.put(`/quotations/${id}`, data);
 
 export const deleteQuotation = (id) =>
-    API.delete(`/${id}`);
+    API.delete(`/quotations/${id}`);
 
 export const finalizeQuotation = (id) =>
-    API.patch(`/${id}/finalize`);
+    API.patch(`/quotations/${id}/finalize`);
 
 export const downloadPDF = (id) =>
-    API.get(`/${id}/pdf`, {
+    API.get(`/quotations/${id}/pdf`, {
         responseType: "blob"
     });
 
 export const downloadExcel = (id) =>
-    API.get(`/${id}/excel`, {
+    API.get(`/quotations/${id}/excel`, {
         responseType: "blob"
     });
