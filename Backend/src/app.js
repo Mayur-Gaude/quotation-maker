@@ -5,6 +5,7 @@ import dotenv from "dotenv";
 import cors from "cors";
 import quotationRoutes from "./routes/quotationRoutes.js";
 import errorHandler from "./middlewares/errorHandler.js";
+import authRoutes from "./routes/authRoutes.js";
 
 dotenv.config();
 
@@ -22,6 +23,7 @@ app.get("/", (req, res) => {
 });
 
 // Routes
+app.use("/api/auth", authRoutes);
 app.use("/api/quotations", quotationRoutes);
 
 // Error handler (must be last)

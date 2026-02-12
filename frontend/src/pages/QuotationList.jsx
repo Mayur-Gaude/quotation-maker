@@ -1,6 +1,6 @@
-import React from "react";
+import React, { use } from "react";
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate,useSearchParams } from "react-router-dom";
 import {
   getQuotations,
   deleteQuotation,
@@ -10,6 +10,8 @@ import {
 
 const QuotationList = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const status = searchParams.get("status");
 
   const [quotations, setQuotations] = useState([]);
   const [search, setSearch] = useState("");
@@ -21,7 +23,7 @@ const QuotationList = () => {
   const fetchQuotations = async () => {
     setLoading(true);
     try {
-      const res = await getQuotations({ page, limit, search });
+      const res = await getQuotations({ page, limit, search, status });
       // setQuotations(res.data.data);
       // setTotal(res.data.total);
       setQuotations(Array.isArray(res.data?.data) ? res.data.data : []);
@@ -37,7 +39,11 @@ const QuotationList = () => {
 
   useEffect(() => {
     fetchQuotations();
-  }, [page, search]);
+  }, [page, search, status]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [search, status]);
 
   const totalPages = Math.max(1, Math.ceil(total / limit));
 
@@ -50,6 +56,21 @@ const QuotationList = () => {
     link.href = window.URL.createObjectURL(blob);
     link.download = `quotation.${type}`;
     link.click();
+  };
+
+  const handleDelete = async id => {
+    const confirmDelete = window.confirm(
+      "Are you sure you want to delete this quotation?"
+    );
+    if (!confirmDelete) return;
+
+    try {
+      await deleteQuotation(id);
+      setQuotations(prev => prev.filter(q => q._id !== id));
+      setTotal(prev => Math.max(0, prev - 1));
+    } catch (err) {
+      console.error("Failed to delete quotation:", err);
+    }
   };
 
   return (
@@ -191,6 +212,13 @@ const QuotationList = () => {
                               className="rounded-lg px-2.5 py-1.5 text-sm font-medium text-violet-600 transition hover:bg-violet-50"
                             >
                               Excel
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDelete(q._id)}
+                              className="rounded-lg px-2.5 py-1.5 text-sm font-medium text-rose-600 transition hover:bg-rose-50"
+                            >
+                              Delete
                             </button>
                           </div>
                         </td>

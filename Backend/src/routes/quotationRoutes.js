@@ -12,7 +12,11 @@ import {
     finalizeQuotationController
 } from "../controllers/quotationController.js";
 
+import authMiddleware from "../middlewares/authMiddleware.js";
+
 const router = express.Router();
+
+router.use(authMiddleware);
 
 router.post("/", createQuotationController);
 router.get("/", getAllQuotationsController);
