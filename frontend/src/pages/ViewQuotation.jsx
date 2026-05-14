@@ -4,21 +4,36 @@ import { useParams, useNavigate } from "react-router-dom";
 import {
   getQuotation,
   downloadPDF,
-  downloadExcel
+  downloadExcel,
+  duplicateQuotation
 } from "../api/quotationApi";
+import Button from "../components/common/Button";
+import Badge from "../components/common/Badge";
+import { LoadingScreen } from "../components/common/Spinner";
+import { useToast } from "../context/ToastContext";
+import { usePreferences } from "../context/PreferencesContext";
+import { ArrowLeftIcon, DownloadIcon, CopyIcon } from "../components/common/Icons";
 
 const ViewQuotation = () => {
   const { id } = useParams();
   const navigate = useNavigate();
+  const toast = useToast();
+  const { currencySymbol, formatMoney } = usePreferences();
 
   const [quotation, setQuotation] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [downloadingPDF, setDownloadingPDF] = useState(false);
+  const [downloadingExcel, setDownloadingExcel] = useState(false);
+  const [cloning, setCloning] = useState(false);
 
   useEffect(() => {
     const fetchQuotation = async () => {
       try {
         const res = await getQuotation(id);
         setQuotation(res.data.data);
+      } catch (err) {
+        toast.error("Failed to load quotation");
+        console.error("Failed to fetch quotation:", err);
       } finally {
         setLoading(false);
       }
@@ -28,22 +43,61 @@ const ViewQuotation = () => {
   }, [id]);
 
   const handleDownload = async type => {
-    const response =
-      type === "pdf" ? await downloadPDF(id) : await downloadExcel(id);
+    if (type === "pdf") {
+      setDownloadingPDF(true);
+    } else {
+      setDownloadingExcel(true);
+    }
 
-    const blob = new Blob([response.data]);
-    const link = document.createElement("a");
-    link.href = window.URL.createObjectURL(blob);
-    link.download = `${quotation.quotationNumber}.${type}`;
-    link.click();
+    try {
+      const response =
+        type === "pdf"
+          ? await downloadPDF(id, currencySymbol)
+          : await downloadExcel(id);
+
+      const blob = new Blob([response.data]);
+      const link = document.createElement("a");
+      link.href = window.URL.createObjectURL(blob);
+      link.download = `${quotation.quotationNumber}.${type}`;
+      link.click();
+
+      toast.success(`${type.toUpperCase()} downloaded successfully`);
+    } catch (err) {
+      console.error(`Failed to download ${type}:`, err);
+      toast.error(`Failed to download ${type.toUpperCase()}`);
+    } finally {
+      if (type === "pdf") {
+        setDownloadingPDF(false);
+      } else {
+        setDownloadingExcel(false);
+      }
+    }
+  };
+
+  const handleClone = async () => {
+    setCloning(true);
+    try {
+      const res = await duplicateQuotation(id);
+      const newId = res.data?.data?._id;
+      if (!newId) {
+        toast.error("Duplicate failed: missing new quotation id");
+        return;
+      }
+      toast.success("Draft created — you can edit the new quotation");
+      navigate(`/edit/${newId}`);
+    } catch (err) {
+      const msg =
+        err.response?.data?.message ||
+        err.message ||
+        "Failed to duplicate quotation";
+      toast.error(msg);
+    } finally {
+      setCloning(false);
+    }
   };
 
   if (loading) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-slate-50">
-        <div className="h-10 w-10 animate-spin rounded-full border-2 border-slate-200 border-t-slate-600" />
-      </div>
-    );
+    return <LoadingScreen message="Loading quotation..." />;
   }
 
   if (!quotation) {
@@ -51,17 +105,24 @@ const ViewQuotation = () => {
       <div className="flex min-h-screen items-center justify-center bg-slate-50 px-4">
         <div className="text-center">
           <p className="text-slate-600">Quotation not found.</p>
-          <button
-            type="button"
+          <Button
+            variant="link"
             onClick={() => navigate("/")}
-            className="mt-3 text-sm font-medium text-slate-600 underline hover:text-slate-800"
+            className="mt-3"
           >
             Back to quotations
-          </button>
+          </Button>
         </div>
       </div>
     );
   }
+
+  const statusVariant =
+    quotation.status === "FINAL"
+      ? "success"
+      : quotation.status === "SENT"
+        ? "info"
+        : "neutral";
 
   return (
     <div className="min-h-screen bg-slate-50 py-8 px-4 sm:px-6 lg:px-8">
@@ -69,13 +130,14 @@ const ViewQuotation = () => {
         {/* Header */}
         <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <button
-              type="button"
+            <Button
+              variant="ghost"
               onClick={() => navigate("/")}
-              className="mb-2 inline-flex items-center gap-1.5 text-sm font-medium text-slate-500 transition hover:text-slate-700"
+              icon={<ArrowLeftIcon className="h-4 w-4" />}
+              className="mb-2"
             >
-              <span aria-hidden>←</span> Back to quotations
-            </button>
+              Back to quotations
+            </Button>
             <h1 className="text-2xl font-bold tracking-tight text-slate-800 sm:text-3xl">
               Quotation {quotation.quotationNumber}
             </h1>
@@ -84,20 +146,35 @@ const ViewQuotation = () => {
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
+            <Button
+              variant="primary"
+              onClick={handleClone}
+              loading={cloning}
+              disabled={
+                cloning || downloadingPDF || downloadingExcel
+              }
+              icon={<CopyIcon className="h-4 w-4" />}
+            >
+              {cloning ? "Cloning…" : "Clone this quotation"}
+            </Button>
+            <Button
+              variant="secondary"
               onClick={() => handleDownload("pdf")}
-              className="inline-flex items-center rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm transition hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-300 focus:ring-offset-2"
+              loading={downloadingPDF}
+              disabled={downloadingPDF || downloadingExcel || cloning}
+              icon={<DownloadIcon className="h-4 w-4" />}
             >
-              Download PDF
-            </button>
-            <button
-              type="button"
+              {downloadingPDF ? "Downloading..." : "Download PDF"}
+            </Button>
+            <Button
+              variant="success"
               onClick={() => handleDownload("excel")}
-              className="inline-flex items-center rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2"
+              loading={downloadingExcel}
+              disabled={downloadingPDF || downloadingExcel || cloning}
+              icon={<DownloadIcon className="h-4 w-4" />}
             >
-              Download Excel
-            </button>
+              {downloadingExcel ? "Downloading..." : "Download Excel"}
+            </Button>
           </div>
         </div>
 
@@ -118,15 +195,7 @@ const ViewQuotation = () => {
                   Status
                 </p>
                 <p className="mt-0.5">
-                  <span
-                    className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium ${
-                      quotation.status === "FINAL"
-                        ? "bg-emerald-100 text-emerald-800"
-                        : "bg-slate-100 text-slate-700"
-                    }`}
-                  >
-                    {quotation.status}
-                  </span>
+                  <Badge variant={statusVariant}>{quotation.status}</Badge>
                 </p>
               </div>
               <div>
@@ -209,10 +278,10 @@ const ViewQuotation = () => {
                         {item.quantity}
                       </td>
                       <td className="px-4 py-3 text-right tabular-nums text-slate-600">
-                        {Number(item.rate).toFixed(2)}
+                        {formatMoney(item.rate)}
                       </td>
                       <td className="px-4 py-3 text-right tabular-nums text-slate-700">
-                        {Number(item.amount).toFixed(2)}
+                        {formatMoney(item.amount)}
                       </td>
                     </tr>
                   ))}
@@ -230,7 +299,7 @@ const ViewQuotation = () => {
               <p className="flex justify-between gap-4 text-slate-600">
                 <span>Sub total</span>
                 <span className="tabular-nums">
-                  {Number(quotation.subTotal).toFixed(2)}
+                  {formatMoney(quotation.subTotal)}
                 </span>
               </p>
               {quotation.tax?.amount != null && quotation.tax.amount !== 0 && (
@@ -253,11 +322,36 @@ const ViewQuotation = () => {
               <p className="flex justify-between gap-4 border-t border-slate-200 pt-3 text-lg font-semibold text-slate-800">
                 <span>Grand total</span>
                 <span className="tabular-nums">
-                  {Number(quotation.grandTotal).toFixed(2)}
+                  {formatMoney(quotation.grandTotal)}
                 </span>
               </p>
             </div>
           </section>
+
+          {(quotation.notes?.trim() || quotation.termsAndConditions?.trim()) && (
+            <div className="space-y-6">
+              {quotation.notes?.trim() && (
+                <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+                  <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-slate-500">
+                    Notes
+                  </h2>
+                  <p className="whitespace-pre-wrap text-sm leading-relaxed text-slate-700">
+                    {quotation.notes.trim()}
+                  </p>
+                </section>
+              )}
+              {quotation.termsAndConditions?.trim() && (
+                <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+                  <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-slate-500">
+                    Terms &amp; conditions
+                  </h2>
+                  <p className="whitespace-pre-wrap text-sm leading-relaxed text-slate-700">
+                    {quotation.termsAndConditions.trim()}
+                  </p>
+                </section>
+              )}
+            </div>
+          )}
         </div>
       </div>
     </div>

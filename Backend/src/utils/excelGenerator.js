@@ -29,6 +29,21 @@ const generateQuotationExcel = async (quotation, res) => {
     sheet.addRow(["Sub Total", quotation.subTotal]);
     sheet.addRow(["Grand Total", quotation.grandTotal]);
 
+    const notesText = quotation.notes?.trim();
+    const termsText = quotation.termsAndConditions?.trim();
+    if (notesText || termsText) {
+        sheet.addRow([]);
+        if (notesText) {
+            sheet.addRow(["Notes"]);
+            sheet.addRow([notesText]);
+        }
+        if (termsText) {
+            sheet.addRow([]);
+            sheet.addRow(["Terms & Conditions"]);
+            sheet.addRow([termsText]);
+        }
+    }
+
     res.setHeader(
         "Content-Disposition",
         `attachment; filename=${quotation.quotationNumber}.xlsx`

@@ -58,7 +58,7 @@ const quotationSchema = new mongoose.Schema(
 
         status: {
             type: String,
-            enum: ["DRAFT", "FINAL"],
+            enum: ["DRAFT", "SENT", "FINAL"],
             default: "DRAFT"
         },
 

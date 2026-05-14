@@ -1,25 +1,3 @@
-// import React from "react";
-// import { BrowserRouter, Routes, Route } from "react-router-dom";
-// import QuotationList from "../pages/QuotationList";
-// import CreateQuotation from "../pages/CreateQuotation";
-// import EditQuotation from "../pages/EditQuotation";
-// import ViewQuotation from "../pages/ViewQuotation";
-
-// const AppRoutes = () => {
-//   return (
-//     <BrowserRouter>
-//       <Routes>
-//         <Route path="/" element={<QuotationList />} />
-//         <Route path="/create" element={<CreateQuotation />} />
-//         <Route path="/edit/:id" element={<EditQuotation />} />
-//         <Route path="/view/:id" element={<ViewQuotation />} />
-//       </Routes>
-//     </BrowserRouter>
-//   );
-// };
-
-// export default AppRoutes;
-
 import React from "react";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 
@@ -27,6 +5,8 @@ import QuotationList from "../pages/QuotationList";
 import CreateQuotation from "../pages/CreateQuotation";
 import EditQuotation from "../pages/EditQuotation";
 import ViewQuotation from "../pages/ViewQuotation";
+import SavedItems from "../pages/SavedItems";
+import Settings from "../pages/Settings";
 
 import Login from "../auth/Login";
 import Register from "../auth/Register";
@@ -70,6 +50,28 @@ const AppRoutes = () => {
             <ProtectedRoute>
               <AuthLayout> 
                 <EditQuotation />
+              </AuthLayout>
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/items"
+          element={
+            <ProtectedRoute>
+              <AuthLayout>
+                <SavedItems />
+              </AuthLayout>
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/settings"
+          element={
+            <ProtectedRoute>
+              <AuthLayout>
+                <Settings />
               </AuthLayout>
             </ProtectedRoute>
           }

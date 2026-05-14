@@ -1,14 +1,33 @@
 // src/utils/pdfGenerator.js
+import fs from "fs";
+import path from "path";
+import { fileURLToPath } from "url";
 import PDFDocument from "pdfkit";
 
-const MARGIN = 50;
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-const formatNumber = (n) =>
+const MARGIN = 50;
+const BRAND = "#1e3a5f";
+const BRAND_LIGHT = "#334e68";
+const ACCENT = "#0ea5e9";
+
+const formatNumber = n =>
     Number(n) != null && !Number.isNaN(Number(n))
         ? Number(n).toFixed(2)
         : "0.00";
 
-const generateQuotationPDF = (quotation, res) => {
+const resolveLogoPath = () =>
+    path.join(__dirname, "..", "assets", "quotation-logo.png");
+
+/**
+ * @param {object} quotation
+ * @param {import("http").ServerResponse} res
+ * @param {{ currencySymbol?: string }} [options]
+ */
+const generateQuotationPDF = (quotation, res, options = {}) => {
+    const currencySymbol = options.currencySymbol || "₹";
+    const formatMoney = n => `${currencySymbol}${formatNumber(n)}`;
+
     const doc = new PDFDocument({
         margin: MARGIN,
         size: "A4",
@@ -27,47 +46,8 @@ const generateQuotationPDF = (quotation, res) => {
     const PAGE_HEIGHT = doc.page.height;
     const CONTENT_WIDTH = PAGE_WIDTH - MARGIN * 2;
 
-    let y = MARGIN;
-
-    // =========================
-    // HEADER (CENTERED)
-    // =========================
-
-    doc.font("Helvetica-Bold").fontSize(20);
-    doc.text("QUOTATION", MARGIN, y, {
-        width: CONTENT_WIDTH,
-        align: "center"
-    });
-
-    y += 30;
-
-    doc.font("Helvetica").fontSize(11);
-
-    doc.text(`Quotation No: ${quotation.quotationNumber}`, {
-        align: "center"
-    });
-
-    doc.moveDown(0.5);
-
-    doc.text(
-        `Date: ${new Date(quotation.quotationDate).toLocaleDateString()}`,
-        { align: "center" }
-    );
-
-    doc.moveDown(0.5);
-
-    doc.text(`By: ${quotation.companyDetails?.name || "—"}`, {
-        align: "center"
-    });
-
-    y = doc.y + 25;
-
-    // =========================
-    // TABLE CONFIG
-    // =========================
-
     const rowPadding = 6;
-    const minRowHeight = 22;
+    const minRowHeight = 24;
 
     const col = {
         no: 40,
@@ -78,13 +58,94 @@ const generateQuotationPDF = (quotation, res) => {
     };
 
     const tableLeft = MARGIN;
-    const tableWidth =
-        col.no + col.desc + col.qty + col.rate + col.amount;
+    const tableWidth = col.no + col.desc + col.qty + col.rate + col.amount;
+
+    const drawHeaderBand = () => {
+        const bandH = 112;
+        doc.save();
+        doc.rect(0, 0, PAGE_WIDTH, bandH).fill(BRAND);
+        doc.rect(0, bandH - 6, PAGE_WIDTH, 6).fill(ACCENT);
+
+        const logoSize = 52;
+        const logoY = 34;
+        const logoX = MARGIN;
+        let logoDrawn = false;
+        try {
+            const logoPath = resolveLogoPath();
+            if (fs.existsSync(logoPath)) {
+                doc.image(logoPath, logoX, logoY, {
+                    width: logoSize,
+                    height: logoSize,
+                    fit: [logoSize, logoSize]
+                });
+                logoDrawn = true;
+            }
+        } catch {
+            /* optional asset */
+        }
+
+        if (!logoDrawn) {
+            doc.roundedRect(logoX, logoY, logoSize, logoSize, 8).fill(BRAND_LIGHT);
+            const letter = (
+                quotation.companyDetails?.name ||
+                quotation.quotationNumber ||
+                "Q"
+            )
+                .trim()
+                .charAt(0)
+                .toUpperCase();
+            doc.fillColor("#ffffff")
+                .font("Helvetica-Bold")
+                .fontSize(24)
+                .text(letter, logoX, logoY + 12, {
+                    width: logoSize,
+                    align: "center"
+                });
+        }
+
+        const textLeft = logoX + logoSize + 18;
+        doc.fillColor("#f8fafc")
+            .font("Helvetica-Bold")
+            .fontSize(26)
+            .text("QUOTATION", textLeft, logoY + 2, {
+                width: PAGE_WIDTH - textLeft - MARGIN,
+                lineGap: 2
+            });
+
+        doc.font("Helvetica")
+            .fontSize(11)
+            .fillColor("#cbd5e1")
+            .text(
+                `No. ${quotation.quotationNumber}   ·   ${new Date(
+                    quotation.quotationDate
+                ).toLocaleDateString("en-IN", {
+                    day: "numeric",
+                    month: "short",
+                    year: "numeric"
+                })}`,
+                textLeft,
+                logoY + 34,
+                { width: PAGE_WIDTH - textLeft - MARGIN }
+            );
+
+        const companyName = quotation.companyDetails?.name || "—";
+        doc.font("Helvetica-Bold")
+            .fontSize(11)
+            .fillColor("#e2e8f0")
+            .text(companyName, MARGIN, logoY + 2, {
+                width: PAGE_WIDTH - MARGIN * 2,
+                align: "right"
+            });
+
+        doc.restore();
+        return bandH + 28;
+    };
+
+    let y = drawHeaderBand();
 
     const drawRowBorders = (rowY, rowHeight) => {
+        doc.strokeColor("#e2e8f0");
         doc.rect(tableLeft, rowY, tableWidth, rowHeight).stroke();
-
-        // Vertical lines
         let x = tableLeft;
         Object.values(col).forEach(width => {
             x += width;
@@ -92,56 +153,51 @@ const generateQuotationPDF = (quotation, res) => {
                 .lineTo(x, rowY + rowHeight)
                 .stroke();
         });
+        doc.strokeColor("#000000");
     };
 
     const drawTableHeader = () => {
         const rowHeight = minRowHeight;
 
-        doc.font("Helvetica-Bold").fontSize(10);
+        doc.rect(tableLeft, y, tableWidth, rowHeight).fill("#e8eef4");
+        doc.strokeColor("#cbd5e1");
+        doc.rect(tableLeft, y, tableWidth, rowHeight).stroke();
+        doc.strokeColor("#000000");
 
-        // Header background
-        doc.rect(tableLeft, y, tableWidth, rowHeight)
-            .fillAndStroke("#f3f4f6", "#000000");
+        doc.fillColor("#1e293b").font("Helvetica-Bold").fontSize(9);
 
-        doc.fillColor("#000");
-
-        doc.text("Sr.", tableLeft + 5, y + rowPadding, {
-            width: col.no - 10
+        doc.text("Sr.", tableLeft + 6, y + rowPadding, {
+            width: col.no - 12
         });
 
-        doc.text("Description", tableLeft + col.no + 5, y + rowPadding, {
-            width: col.desc - 10
+        doc.text("Description", tableLeft + col.no + 6, y + rowPadding, {
+            width: col.desc - 12
         });
 
-        doc.text("Qty", tableLeft + col.no + col.desc + 5, y + rowPadding, {
-            width: col.qty - 10,
+        doc.text("Qty", tableLeft + col.no + col.desc + 6, y + rowPadding, {
+            width: col.qty - 12,
             align: "right"
         });
 
         doc.text(
             "Rate",
-            tableLeft + col.no + col.desc + col.qty + 5,
+            tableLeft + col.no + col.desc + col.qty + 6,
             y + rowPadding,
-            { width: col.rate - 10, align: "right" }
+            { width: col.rate - 12, align: "right" }
         );
 
         doc.text(
             "Amount",
-            tableLeft +
-            col.no +
-            col.desc +
-            col.qty +
-            col.rate +
-            5,
+            tableLeft + col.no + col.desc + col.qty + col.rate + 6,
             y + rowPadding,
-            { width: col.amount - 10, align: "right" }
+            { width: col.amount - 12, align: "right" }
         );
 
         drawRowBorders(y, rowHeight);
 
         y += rowHeight;
 
-        doc.font("Helvetica").fontSize(10);
+        doc.fillColor("#0f172a").font("Helvetica").fontSize(9.5);
     };
 
     const checkPageBreak = neededHeight => {
@@ -152,179 +208,148 @@ const generateQuotationPDF = (quotation, res) => {
         }
     };
 
-    // Draw first header
-    drawTableHeader();
+    doc.font("Helvetica-Bold")
+        .fontSize(12)
+        .fillColor("#0f172a")
+        .text("Line items", MARGIN, y);
+    y += 22;
 
-    // =========================
-    // TABLE ROWS
-    // =========================
+    drawTableHeader();
 
     const items = quotation.items || [];
 
     items.forEach((item, index) => {
-        const descHeight = doc.heightOfString(
-            item.description || "—",
-            { width: col.desc - 10 }
-        );
+        const descHeight = doc.heightOfString(item.description || "—", {
+            width: col.desc - 12
+        });
 
-        const rowHeight = Math.max(
-            minRowHeight,
-            descHeight + rowPadding * 2
-        );
+        const rowHeight = Math.max(minRowHeight, descHeight + rowPadding * 2);
 
         checkPageBreak(rowHeight);
 
-        // Draw borders first
         drawRowBorders(y, rowHeight);
 
-        // Sr
-        doc.text(String(index + 1),
-            tableLeft + 5,
+        doc.fillColor("#0f172a");
+
+        doc.text(String(index + 1), tableLeft + 6, y + rowPadding, {
+            width: col.no - 12
+        });
+
+        doc.font("Helvetica")
+            .fontSize(9.5)
+            .text(
+                item.description || "—",
+                tableLeft + col.no + 6,
+                y + rowPadding,
+                { width: col.desc - 12, lineGap: 1 }
+            );
+
+        doc.text(
+            String(item.quantity ?? ""),
+            tableLeft + col.no + col.desc + 6,
             y + rowPadding,
-            { width: col.no - 10 }
+            { width: col.qty - 12, align: "right" }
         );
 
-        // Description
-        doc.text(item.description || "—",
-            tableLeft + col.no + 5,
+        doc.text(
+            formatMoney(item.rate),
+            tableLeft + col.no + col.desc + col.qty + 6,
             y + rowPadding,
-            { width: col.desc - 10 }
+            { width: col.rate - 12, align: "right" }
         );
 
-        // Qty
-        doc.text(String(item.quantity ?? ""),
-            tableLeft + col.no + col.desc + 5,
+        doc.font("Helvetica-Bold").text(
+            formatMoney(item.amount),
+            tableLeft + col.no + col.desc + col.qty + col.rate + 6,
             y + rowPadding,
-            { width: col.qty - 10, align: "right" }
+            { width: col.amount - 12, align: "right" }
         );
 
-        // Rate
-        doc.text(formatNumber(item.rate),
-            tableLeft + col.no + col.desc + col.qty + 5,
-            y + rowPadding,
-            { width: col.rate - 10, align: "right" }
-        );
-
-        // Amount
-        doc.text(formatNumber(item.amount),
-            tableLeft +
-            col.no +
-            col.desc +
-            col.qty +
-            col.rate +
-            5,
-            y + rowPadding,
-            { width: col.amount - 10, align: "right" }
-        );
+        doc.font("Helvetica");
 
         y += rowHeight;
     });
 
-
-    // =========================
-    // TOTAL SECTION
-    // =========================
-
-    checkPageBreak(80);
+    checkPageBreak(88);
 
     doc.moveTo(tableLeft, y)
+        .lineWidth(1)
+        .strokeColor("#cbd5e1")
         .lineTo(tableLeft + CONTENT_WIDTH, y)
         .stroke();
+    doc.strokeColor("#000000");
 
-    y += 20;
+    y += 22;
 
     const totalsRight = tableLeft + col.no + col.desc + col.qty + col.rate;
 
-    doc.font("Helvetica-Bold").fontSize(12);
+    doc.font("Helvetica-Bold")
+        .fontSize(12)
+        .fillColor(BRAND);
 
-    doc.text("Grand Total:", totalsRight - 120, y, {
+    doc.text("Grand total:", totalsRight - 120, y, {
         width: 120,
         align: "right"
     });
 
-    doc.text(formatNumber(quotation.grandTotal), totalsRight, y, {
+    doc.text(formatMoney(quotation.grandTotal), totalsRight, y, {
         width: col.amount,
         align: "right"
     });
 
-    y += 40;
+    y += 36;
 
-    // // =========================
-    // // TERMS
-    // // =========================
+    doc.fillColor("#0f172a");
 
-    // if (quotation.termsAndConditions) {
-    //     checkPageBreak(100);
+    const notesText = quotation.notes?.trim();
+    if (notesText) {
+        const notesBlockHeight =
+            doc.heightOfString(notesText, { width: CONTENT_WIDTH }) + 36;
+        checkPageBreak(notesBlockHeight);
 
-    //     doc.font("Helvetica-Bold").fontSize(11);
-    //     doc.text("Terms & Conditions", MARGIN, y);
+        doc.font("Helvetica-Bold").fontSize(11).fillColor(BRAND);
+        doc.text("Notes", MARGIN, y);
+        y += 16;
 
-    //     y += 15;
+        doc.font("Helvetica").fontSize(10).fillColor("#334155");
+        doc.text(notesText, MARGIN, y, {
+            width: CONTENT_WIDTH,
+            lineGap: 2
+        });
 
-    //     doc.font("Helvetica").fontSize(10);
-    //     doc.text(quotation.termsAndConditions, MARGIN, y, {
-    //         width: CONTENT_WIDTH
-    //     });
+        y = doc.y + 20;
+    }
 
-    //     y = doc.y + 25;
-    // }
+    const termsText = quotation.termsAndConditions?.trim();
+    if (termsText) {
+        const termsHeight =
+            doc.heightOfString(termsText, { width: CONTENT_WIDTH }) + 36;
 
-    // =========================
-    // TERMS
-    // =========================
+        checkPageBreak(termsHeight);
 
-    const termsText =
-        quotation.termsAndConditions?.trim() ||
-        "Payment is due within 30 days from the date of quotation. All services will be provided as agreed. Any additional work will be billed separately.";
+        doc.font("Helvetica-Bold").fontSize(11).fillColor(BRAND);
+        doc.text("Terms & conditions", MARGIN, y);
 
-    const termsHeight =
-        doc.heightOfString(termsText, { width: CONTENT_WIDTH }) + 40;
+        y += 16;
 
-    checkPageBreak(termsHeight);
+        doc.font("Helvetica").fontSize(10).fillColor("#334155");
+        doc.text(termsText, MARGIN, y, {
+            width: CONTENT_WIDTH,
+            lineGap: 2
+        });
 
-    doc.font("Helvetica-Bold").fontSize(11);
-    doc.text("Terms & Conditions", MARGIN, y);
+        y = doc.y + 20;
+    }
 
-    y += 18;
+    checkPageBreak(36);
 
-    doc.font("Helvetica").fontSize(10);
-    doc.text(termsText, MARGIN, y, {
-        width: CONTENT_WIDTH
-    });
-
-    y = doc.y + 25;
-
-    // =========================
-    // THANK YOU MESSAGE
-    // =========================
-
-    checkPageBreak(40);
-
-    doc.font("Helvetica-Oblique").fontSize(11);
-    doc.text(
-        "Thank you for the opportunity to work with you!",
-        MARGIN,
-        y,
-        { width: CONTENT_WIDTH, align: "center" }
-    );
-
-    // // =========================
-    // // PAGE NUMBERS
-    // // =========================
-
-    // const range = doc.bufferedPageRange();
-
-    // for (let i = 0; i < range.count; i++) {
-    //     doc.switchToPage(i);
-
-    //     doc.fontSize(9).font("Helvetica");
-    //     doc.text(
-    //         `Page ${i + 1} of ${range.count}`,
-    //         0,
-    //         PAGE_HEIGHT - 40,
-    //         { align: "center" }
-    //     );
-    // }
+    doc.font("Helvetica-Oblique")
+        .fontSize(10)
+        .fillColor("#64748b")
+        .text("Thank you for your business.", MARGIN, y, {
+            width: CONTENT_WIDTH,
+            align: "center"
+        });
 
     doc.end();
 };

@@ -2,10 +2,34 @@ import React from "react";
 import { useNavigate } from "react-router-dom";
 import useQuotation from "../hooks/useQuotation";
 import { createQuotation } from "../api/quotationApi";
+import { getSqlItems } from "../api/sqlItemsApi";
+import PresetDescriptionInput from "../components/quotation/PresetDescriptionInput";
+import Button from "../components/common/Button";
+import { useToast } from "../context/ToastContext";
+import { usePreferences } from "../context/PreferencesContext";
 
 const CreateQuotation = () => {
   const navigate = useNavigate();
+  const toast = useToast();
+  const { formatMoney } = usePreferences();
   const [error, setError] = React.useState(null);
+  const [loading, setLoading] = React.useState(false);
+  const [itemPresets, setItemPresets] = React.useState([]);
+
+  React.useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await getSqlItems();
+        if (!cancelled) setItemPresets(res.data?.data ?? []);
+      } catch {
+        if (!cancelled) setItemPresets([]);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const {
     companyDetails,
@@ -16,15 +40,22 @@ const CreateQuotation = () => {
     addItem,
     updateItem,
     removeItem,
+    applyItemPreset,
     tax,
     setTax,
     discount,
     setDiscount,
+    termsAndConditions,
+    setTermsAndConditions,
+    notes,
+    setNotes,
     totals
   } = useQuotation();
 
   const handleSubmit = async () => {
     setError(null);
+    setLoading(true);
+    
     const payload = {
       companyDetails,
       customerDetails,
@@ -33,16 +64,22 @@ const CreateQuotation = () => {
       tax: { percentage: Number(tax) || 0, amount: totals.taxAmount },
       discount: { amount: Number(discount) || 0 },
       grandTotal: totals.grandTotal,
+      termsAndConditions: termsAndConditions.trim(),
+      notes: notes.trim(),
       status: "DRAFT"
     };
 
     try {
       await createQuotation(payload);
+      toast.success("Quotation created successfully!");
       navigate("/");
     } catch (err) {
       const message =
         err.response?.data?.message || err.message || "Failed to create quotation";
       setError(message);
+      toast.error(message);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -82,10 +119,19 @@ const CreateQuotation = () => {
           </div>
         )}
 
-        <div className="space-y-6">
+        <div className="overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-sm ring-1 ring-slate-900/[0.04]">
+          <div className="border-b border-slate-100 bg-gradient-to-r from-sky-50/70 via-white to-indigo-50/50 px-5 py-4 sm:px-8">
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-sky-800">
+              New quotation
+            </p>
+            <p className="mt-0.5 text-sm text-slate-600">
+              Work through each block below — your totals update as you go.
+            </p>
+          </div>
+          <div className="space-y-8 p-5 sm:p-8">
           {/* Company & Customer cards */}
           <div className="grid gap-6 sm:grid-cols-2">
-            <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+            <section className="rounded-xl border border-slate-100 bg-slate-50/50 p-5 ring-1 ring-slate-900/[0.03] sm:p-6">
               <h2 className="mb-4 text-base font-semibold text-slate-800">
                 Your company
               </h2>
@@ -104,7 +150,7 @@ const CreateQuotation = () => {
               />
             </section>
 
-            <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+            <section className="rounded-xl border border-slate-100 bg-slate-50/50 p-5 ring-1 ring-slate-900/[0.03] sm:p-6">
               <h2 className="mb-4 text-base font-semibold text-slate-800">
                 Customer
               </h2>
@@ -125,7 +171,7 @@ const CreateQuotation = () => {
           </div>
 
           {/* Line items */}
-          <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+          <section className="rounded-xl border border-slate-100 bg-slate-50/50 p-5 ring-1 ring-slate-900/[0.03] sm:p-6">
             <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
               <h2 className="text-base font-semibold text-slate-800">
                 Line items
@@ -165,14 +211,12 @@ const CreateQuotation = () => {
                       className="border-b border-slate-100 last:border-b-0 hover:bg-slate-50/50"
                     >
                       <td className="px-4 py-2">
-                        <input
-                          type="text"
-                          placeholder="Item description"
-                          className={`${inputBase} border-slate-100 py-2`}
+                        <PresetDescriptionInput
                           value={item.description}
-                          onChange={e =>
-                            updateItem(i, "description", e.target.value)
-                          }
+                          onChange={v => updateItem(i, "description", v)}
+                          onSelectPreset={preset => applyItemPreset(i, preset)}
+                          presets={itemPresets}
+                          inputClassName={`${inputBase} border-slate-100 py-2`}
                         />
                       </td>
                       <td className="px-4 py-2">
@@ -220,8 +264,47 @@ const CreateQuotation = () => {
             </div>
           </section>
 
+          {/* Notes & terms */}
+          <section className="rounded-xl border border-slate-100 bg-slate-50/50 p-5 ring-1 ring-slate-900/[0.03] sm:p-6">
+            <h2 className="mb-4 text-base font-semibold text-slate-800">
+              Notes & terms
+            </h2>
+            <p className="mb-4 text-sm text-slate-500">
+              Optional. Shown on the quotation view and included in PDF / Excel when
+              provided.
+            </p>
+            <div className="space-y-4">
+              <div>
+                <label className={labelBase} htmlFor="quote-notes">
+                  Notes
+                </label>
+                <textarea
+                  id="quote-notes"
+                  rows={3}
+                  placeholder="e.g. Valid 14 days. Delivery ex-works."
+                  className={`${inputBase} min-h-[88px] resize-y py-3`}
+                  value={notes}
+                  onChange={e => setNotes(e.target.value)}
+                />
+              </div>
+              <div>
+                <label className={labelBase} htmlFor="quote-terms">
+                  Terms &amp; conditions
+                </label>
+                <textarea
+                  id="quote-terms"
+                  rows={5}
+                  placeholder="Payment terms, warranties, cancellation policy…"
+                  className={`${inputBase} min-h-[120px] resize-y py-3`}
+                  value={termsAndConditions}
+                  onChange={e => setTermsAndConditions(e.target.value)}
+                />
+              </div>
+            </div>
+          </section>
+
           {/* Totals & actions */}
-          <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+          <section className="rounded-xl border border-slate-100 bg-slate-50/50 p-5 ring-1 ring-slate-900/[0.03] sm:p-6">
             <h2 className="mb-4 text-base font-semibold text-slate-800">
               Totals
             </h2>
@@ -262,34 +345,36 @@ const CreateQuotation = () => {
                 <p className="flex justify-between gap-8 text-slate-600">
                   <span>Sub total</span>
                   <span className="font-medium tabular-nums text-slate-800">
-                    {Number(totals.subTotal).toFixed(2)}
+                    {formatMoney(totals.subTotal)}
                   </span>
                 </p>
                 <p className="flex justify-between gap-8 text-lg font-semibold text-slate-800">
                   <span>Grand total</span>
                   <span className="tabular-nums">
-                    {Number(totals.grandTotal).toFixed(2)}
+                    {formatMoney(totals.grandTotal)}
                   </span>
                 </p>
               </div>
               <div className="flex flex-wrap gap-3">
-                <button
-                  type="button"
+                <Button
+                  variant="secondary"
                   onClick={() => navigate("/")}
-                  className="rounded-lg border border-slate-300 bg-white px-5 py-2.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-300 focus:ring-offset-2"
+                  disabled={loading}
                 >
                   Cancel
-                </button>
-                <button
-                  type="button"
+                </Button>
+                <Button
+                  variant="success"
                   onClick={handleSubmit}
-                  className="rounded-lg bg-emerald-600 px-5 py-2.5 text-sm font-medium text-white shadow-sm transition hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2"
+                  loading={loading}
+                  disabled={loading || items.length === 0}
                 >
-                  Save quotation
-                </button>
+                  {loading ? "Saving..." : "Save Quotation"}
+                </Button>
               </div>
             </div>
           </section>
+          </div>
         </div>
       </div>
     </div>

@@ -1,21 +1,3 @@
-// import axios from "axios";
-
-// const API = axios.create({
-//     // It will use the variable if it exists, otherwise it defaults to localhost
-//     baseURL: import.meta.env.VITE_API_URL || "http://localhost:5000/api/quotations"
-//     // baseURL: "http://localhost:5000/api/quotations"
-// });
-
-// export const getQuotations = params => API.get("/", { params });
-// export const getQuotation = id => API.get(`/${id}`);
-// export const createQuotation = data => API.post("/", data);
-// export const updateQuotation = (id, data) => API.put(`/${id}`, data);
-// export const deleteQuotation = id => API.delete(`/${id}`);
-// export const finalizeQuotation = id => API.patch(`/${id}/finalize`);
-// export const downloadPDF = id => API.get(`/${id}/pdf`, { responseType: "blob" });
-// export const downloadExcel = id =>
-//     API.get(`/${id}/excel`, { responseType: "blob" });
-
 import axios from "axios";
 
 const API = axios.create({
@@ -38,6 +20,9 @@ API.interceptors.request.use(
 export const getQuotations = (params) =>
     API.get("/quotations/", { params });
 
+export const getDashboardStats = () =>
+    API.get("/quotations/stats/dashboard");
+
 export const getQuotation = (id) =>
     API.get(`/quotations/${id}`);
 
@@ -53,12 +38,22 @@ export const deleteQuotation = (id) =>
 export const finalizeQuotation = (id) =>
     API.patch(`/quotations/${id}/finalize`);
 
-export const downloadPDF = (id) =>
+export const markQuotationSent = id =>
+    API.patch(`/quotations/${id}/mark-sent`);
+
+export const duplicateQuotation = id =>
+    API.post(`/quotations/${id}/duplicate`);
+
+export const downloadPDF = (id, currencySymbol) =>
     API.get(`/quotations/${id}/pdf`, {
-        responseType: "blob"
+        responseType: "blob",
+        params: currencySymbol ? { currency: currencySymbol } : {}
     });
 
 export const downloadExcel = (id) =>
     API.get(`/quotations/${id}/excel`, {
         responseType: "blob"
     });
+
+/** Shared axios instance (auth interceptor) for other API modules */
+export { API as apiClient };

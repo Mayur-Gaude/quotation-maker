@@ -7,10 +7,20 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
-node_modules
+# Dependencies
+node_modules/
+
+# Build
 dist
 dist-ssr
+
+# Environment
+.env
+.env.local
 *.local
+
+# Graphify
+graphify-out/
 
 # Editor directories and files
 .vscode/*

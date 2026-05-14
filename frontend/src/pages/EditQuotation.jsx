@@ -5,12 +5,21 @@ import useQuotation from "../hooks/useQuotation";
 import {
   getQuotation,
   updateQuotation,
-  finalizeQuotation
+  finalizeQuotation,
+  markQuotationSent
 } from "../api/quotationApi";
+import { getSqlItems } from "../api/sqlItemsApi";
+import PresetDescriptionInput from "../components/quotation/PresetDescriptionInput";
+import Button from "../components/common/Button";
+import Badge from "../components/common/Badge";
+import { useToast } from "../context/ToastContext";
+import { usePreferences } from "../context/PreferencesContext";
 
 const EditQuotation = () => {
   const { id } = useParams();
   const navigate = useNavigate();
+  const toast = useToast();
+  const { formatMoney } = usePreferences();
 
   const {
     companyDetails,
@@ -22,16 +31,40 @@ const EditQuotation = () => {
     addItem,
     updateItem,
     removeItem,
+    applyItemPreset,
     tax,
     setTax,
     discount,
     setDiscount,
+    termsAndConditions,
+    setTermsAndConditions,
+    notes,
+    setNotes,
     totals
   } = useQuotation();
 
   const [status, setStatus] = useState("DRAFT");
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [finalizing, setFinalizing] = useState(false);
+  const [markingSent, setMarkingSent] = useState(false);
   const [error, setError] = useState(null);
+  const [itemPresets, setItemPresets] = useState([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await getSqlItems();
+        if (!cancelled) setItemPresets(res.data?.data ?? []);
+      } catch {
+        if (!cancelled) setItemPresets([]);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     const fetchQuotation = async () => {
@@ -44,18 +77,23 @@ const EditQuotation = () => {
         setStatus(q.status || "DRAFT");
         setTax(q.tax?.percentage ?? 0);
         setDiscount(q.discount?.amount ?? 0);
+        setTermsAndConditions(q.termsAndConditions ?? "");
+        setNotes(q.notes ?? "");
         setItems(
           Array.isArray(q.items) && q.items.length > 0
             ? q.items.map(item => ({
                 description: item.description ?? "",
                 quantity: item.quantity ?? 0,
                 rate: item.rate ?? 0,
+                unit: item.unit ?? "",
                 amount: (item.quantity ?? 0) * (item.rate ?? 0)
               }))
-            : [{ description: "", quantity: 1, rate: 0, amount: 0 }]
+            : [{ description: "", quantity: 1, rate: 0, unit: "", amount: 0 }]
         );
       } catch (err) {
-        setError(err.response?.data?.message || "Failed to load quotation");
+        const message = err.response?.data?.message || "Failed to load quotation";
+        setError(message);
+        toast.error(message);
       } finally {
         setLoading(false);
       }
@@ -66,6 +104,7 @@ const EditQuotation = () => {
 
   const handleUpdate = async () => {
     setError(null);
+    setSaving(true);
     const payload = {
       companyDetails,
       customerDetails,
@@ -73,23 +112,49 @@ const EditQuotation = () => {
       subTotal: totals.subTotal,
       tax: { percentage: Number(tax) || 0, amount: totals.taxAmount },
       discount: { amount: Number(discount) || 0 },
-      grandTotal: totals.grandTotal
+      grandTotal: totals.grandTotal,
+      termsAndConditions: termsAndConditions.trim(),
+      notes: notes.trim()
     };
 
     try {
       await updateQuotation(id, payload);
+      toast.success("Quotation updated");
       navigate("/");
     } catch (err) {
       setError(
         err.response?.data?.message || err.message || "Failed to update quotation"
       );
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleMarkSent = async () => {
+    setError(null);
+    setMarkingSent(true);
+    try {
+      const res = await markQuotationSent(id);
+      setStatus(res.data?.data?.status || "SENT");
+      toast.success("Marked as sent");
+    } catch (err) {
+      setError(
+        err.response?.data?.message ||
+          err.message ||
+          "Could not update status"
+      );
+      toast.error(err.response?.data?.message || "Could not mark as sent");
+    } finally {
+      setMarkingSent(false);
     }
   };
 
   const handleFinalize = async () => {
     setError(null);
+    setFinalizing(true);
     try {
       await finalizeQuotation(id);
+      toast.success("Quotation finalized");
       navigate("/");
     } catch (err) {
       setError(
@@ -97,6 +162,9 @@ const EditQuotation = () => {
           err.message ||
           "Failed to finalize quotation"
       );
+      toast.error(err.response?.data?.message || "Failed to finalize");
+    } finally {
+      setFinalizing(false);
     }
   };
 
@@ -131,13 +199,15 @@ const EditQuotation = () => {
   }
 
   const disabled = status === "FINAL";
+  const statusVariant =
+    status === "FINAL" ? "success" : status === "SENT" ? "info" : "neutral";
 
   return (
     <div className="min-h-screen bg-slate-50 py-8 px-4 sm:px-6 lg:px-8">
       <div className="mx-auto max-w-4xl">
         {/* Header */}
-        <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div>
+        <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <div className="min-w-0 flex-1">
             <button
               type="button"
               onClick={() => navigate("/")}
@@ -146,13 +216,27 @@ const EditQuotation = () => {
               <span aria-hidden>←</span> Back to quotations
             </button>
             <h1 className="text-2xl font-bold tracking-tight text-slate-800 sm:text-3xl">
-              Edit Quotation
+              Edit quotation
             </h1>
             <p className="mt-1 text-sm text-slate-500">
               {disabled
                 ? "This quotation is finalized and cannot be edited."
-                : "Update the details below and save or finalize."}
+                : "Update details, mark as sent when you email it, then finalize when accepted."}
             </p>
+          </div>
+          <div className="flex flex-shrink-0 flex-wrap items-center gap-2 sm:justify-end">
+            <Badge variant={statusVariant}>{status}</Badge>
+            {status === "DRAFT" && !disabled && (
+              <Button
+                variant="secondary"
+                size="sm"
+                loading={markingSent}
+                disabled={markingSent || saving || finalizing}
+                onClick={handleMarkSent}
+              >
+                Mark as sent
+              </Button>
+            )}
           </div>
         </div>
 
@@ -171,10 +255,20 @@ const EditQuotation = () => {
           </div>
         )}
 
-        <div className="space-y-6">
+        <div className="overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-sm ring-1 ring-slate-900/[0.04]">
+          <div className="border-b border-slate-100 bg-gradient-to-r from-sky-50/70 via-white to-indigo-50/50 px-5 py-4 sm:px-8">
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-sky-800">
+              Quotation body
+            </p>
+            <p className="mt-0.5 text-sm text-slate-600">
+              All sections below belong to this quote — keep totals accurate before
+              sending.
+            </p>
+          </div>
+          <div className="space-y-8 p-5 sm:p-8">
           {/* Company & Customer */}
           <div className="grid gap-6 sm:grid-cols-2">
-            <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+            <section className="rounded-xl border border-slate-100 bg-slate-50/50 p-5 ring-1 ring-slate-900/[0.03] sm:p-6">
               <h2 className="mb-4 text-base font-semibold text-slate-800">
                 Your company
               </h2>
@@ -194,7 +288,7 @@ const EditQuotation = () => {
               />
             </section>
 
-            <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+            <section className="rounded-xl border border-slate-100 bg-slate-50/50 p-5 ring-1 ring-slate-900/[0.03] sm:p-6">
               <h2 className="mb-4 text-base font-semibold text-slate-800">
                 Customer
               </h2>
@@ -219,7 +313,7 @@ const EditQuotation = () => {
           </div>
 
           {/* Line items */}
-          <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+          <section className="rounded-xl border border-slate-100 bg-slate-50/50 p-5 ring-1 ring-slate-900/[0.03] sm:p-6">
             <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
               <h2 className="text-base font-semibold text-slate-800">
                 Line items
@@ -263,15 +357,13 @@ const EditQuotation = () => {
                       className="border-b border-slate-100 last:border-b-0 hover:bg-slate-50/50"
                     >
                       <td className="px-4 py-2">
-                        <input
-                          type="text"
-                          placeholder="Item description"
-                          className={`${inputBase} border-slate-100 py-2`}
-                          disabled={disabled}
+                        <PresetDescriptionInput
                           value={item.description}
-                          onChange={e =>
-                            updateItem(i, "description", e.target.value)
-                          }
+                          onChange={v => updateItem(i, "description", v)}
+                          onSelectPreset={preset => applyItemPreset(i, preset)}
+                          presets={itemPresets}
+                          disabled={disabled}
+                          inputClassName={`${inputBase} border-slate-100 py-2`}
                         />
                       </td>
                       <td className="px-4 py-2">
@@ -323,8 +415,49 @@ const EditQuotation = () => {
             </div>
           </section>
 
+          {/* Notes & terms */}
+          <section className="rounded-xl border border-slate-100 bg-slate-50/50 p-5 ring-1 ring-slate-900/[0.03] sm:p-6">
+            <h2 className="mb-4 text-base font-semibold text-slate-800">
+              Notes & terms
+            </h2>
+            <p className="mb-4 text-sm text-slate-500">
+              Optional. Shown on the quotation view and included in PDF / Excel when
+              provided.
+            </p>
+            <div className="space-y-4">
+              <div>
+                <label className={labelBase} htmlFor="edit-quote-notes">
+                  Notes
+                </label>
+                <textarea
+                  id="edit-quote-notes"
+                  rows={3}
+                  placeholder="e.g. Valid 14 days. Delivery ex-works."
+                  className={`${inputBase} min-h-[88px] resize-y py-3`}
+                  disabled={disabled}
+                  value={notes}
+                  onChange={e => setNotes(e.target.value)}
+                />
+              </div>
+              <div>
+                <label className={labelBase} htmlFor="edit-quote-terms">
+                  Terms &amp; conditions
+                </label>
+                <textarea
+                  id="edit-quote-terms"
+                  rows={5}
+                  placeholder="Payment terms, warranties, cancellation policy…"
+                  className={`${inputBase} min-h-[120px] resize-y py-3`}
+                  disabled={disabled}
+                  value={termsAndConditions}
+                  onChange={e => setTermsAndConditions(e.target.value)}
+                />
+              </div>
+            </div>
+          </section>
+
           {/* Totals & actions */}
-          <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+          <section className="rounded-xl border border-slate-100 bg-slate-50/50 p-5 ring-1 ring-slate-900/[0.03] sm:p-6">
             <h2 className="mb-4 text-base font-semibold text-slate-800">
               Totals
             </h2>
@@ -367,45 +500,48 @@ const EditQuotation = () => {
                 <p className="flex justify-between gap-8 text-slate-600">
                   <span>Sub total</span>
                   <span className="tabular-nums font-medium text-slate-800">
-                    {Number(totals.subTotal).toFixed(2)}
+                    {formatMoney(totals.subTotal)}
                   </span>
                 </p>
                 <p className="flex justify-between gap-8 text-lg font-semibold text-slate-800">
                   <span>Grand total</span>
                   <span className="tabular-nums">
-                    {Number(totals.grandTotal).toFixed(2)}
+                    {formatMoney(totals.grandTotal)}
                   </span>
                 </p>
               </div>
               <div className="flex flex-wrap gap-3">
-                <button
-                  type="button"
+                <Button
+                  variant="secondary"
                   onClick={() => navigate("/")}
-                  className="rounded-lg border border-slate-300 bg-white px-5 py-2.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-300 focus:ring-offset-2"
+                  disabled={saving || finalizing || markingSent}
                 >
                   Cancel
-                </button>
+                </Button>
                 {!disabled && (
-                  <button
-                    type="button"
+                  <Button
+                    variant="primary"
                     onClick={handleUpdate}
-                    className="rounded-lg bg-slate-800 px-5 py-2.5 text-sm font-medium text-white shadow-sm transition hover:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-slate-500 focus:ring-offset-2"
+                    loading={saving}
+                    disabled={saving || finalizing || markingSent || items.length === 0}
                   >
-                    Update quotation
-                  </button>
+                    {saving ? "Updating..." : "Update Quotation"}
+                  </Button>
                 )}
-                {status === "DRAFT" && (
-                  <button
-                    type="button"
+                {(status === "DRAFT" || status === "SENT") && !disabled && (
+                  <Button
+                    variant="success"
                     onClick={handleFinalize}
-                    className="rounded-lg bg-emerald-600 px-5 py-2.5 text-sm font-medium text-white shadow-sm transition hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2"
+                    loading={finalizing}
+                    disabled={saving || finalizing || markingSent}
                   >
-                    Finalize quotation
-                  </button>
+                    {finalizing ? "Finalizing..." : "Finalize quotation"}
+                  </Button>
                 )}
               </div>
             </div>
           </section>
+          </div>
         </div>
       </div>
     </div>

@@ -4,6 +4,7 @@ import express from "express";
 import dotenv from "dotenv";
 import cors from "cors";
 import quotationRoutes from "./routes/quotationRoutes.js";
+import sqlItemRoutes from "./routes/sqlItemRoutes.js";
 import errorHandler from "./middlewares/errorHandler.js";
 import authRoutes from "./routes/authRoutes.js";
 
@@ -25,6 +26,7 @@ app.get("/", (req, res) => {
 // Routes
 app.use("/api/auth", authRoutes);
 app.use("/api/quotations", quotationRoutes);
+app.use("/api/sqlitems", sqlItemRoutes);
 
 // Error handler (must be last)
 app.use(errorHandler);

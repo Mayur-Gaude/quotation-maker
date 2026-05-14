@@ -47,7 +47,7 @@ const quotationSchema = Joi.object({
     termsAndConditions: Joi.string().allow("", null),
     notes: Joi.string().allow("", null),
 
-    status: Joi.string().valid("DRAFT", "FINAL").optional()
+    status: Joi.string().valid("DRAFT", "SENT", "FINAL").optional()
 });
 
 export default quotationSchema;

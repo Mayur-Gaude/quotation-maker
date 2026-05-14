@@ -1,0 +1,26 @@
+# Dependencies
+node_modules/
+Backend/node_modules/
+frontend/node_modules/
+
+# Environment
+.env
+*.env
+
+# Graphify
+graphify-out/
+Backend/graphify-out/
+frontend/graphify-out/
+
+# Logs
+logs/
+*.log
+
+# Build
+dist/
+build/
+
+# Editor
+.vscode/
+.idea/
+.DS_Store
